@@ -5,6 +5,7 @@
  *
  *   organisations, departments, positions, people, assignments, fields, clients, shares    list, add, read, change, remove
  *   clients/<id>/key        a new key for a system (shown once; the old one stops opening anything)
+ *   positions/<id>/jd       a seat's job description: its versions, a new one, one taken back
  *   keepers                 the keepers' keys (a new one is shown once; the last one is never removed)
  *   access                  the last questions applications asked, against the share that answered each
  *   changes                 every change, after `?since=<id>`
@@ -14,6 +15,7 @@
 import { CLIENT_PREFIX, DEPTHS, KEEPER_PREFIX } from './auth.js';
 import { NAME_SEP, card, chainOf, chartOf, organisationJson, personRef, reportsOf } from './chart.js';
 import { parseCsv, writeCsv } from './csv.js';
+import { inForce, versionOut, versionsOf, writeVersion } from './descriptions.js';
 import { EMAIL, cleanExtra, cleanField, fieldJson, fieldsFor, readField } from './fields.js';
 import { OrgError, dayOf, flag, hashOf, newId, newKey, now, parsed, text, today } from './util.js';
 
@@ -536,6 +538,37 @@ export const assignments = {
   },
 };
 
+// ── a seat's job description, version by version ─────────────────────────────────────────────────────────────
+
+export const descriptions = {
+  /** Every version, the latest first, and the one in force on the day (`?as_of=`). */
+  read(ctx, id) {
+    must(ctx);
+    const seat = one(ctx.store, 'positions', id, 'position');
+    const asOf = dayOf(ctx.query.get('as_of'), day(ctx));
+    const current = inForce(ctx.store, seat.id, asOf);
+    return { position: seat.id, as_of: asOf, current: current ? versionOut(current) : null, versions: versionsOf(ctx.store, seat.id) };
+  },
+  /** A new version, over the last: the sections it does not mention are carried on. */
+  create(ctx, id) {
+    must(ctx);
+    const seat = one(ctx.store, 'positions', id, 'position');
+    return { status: 201, body: writeVersion(ctx.store, ctx.who, seat, body(ctx), day(ctx)) };
+  },
+  /** A version taken back (one written by mistake): the one before it is in force again. */
+  remove(ctx, id, version) {
+    must(ctx);
+    const seat = one(ctx.store, 'positions', id, 'position');
+    const before = ctx.store.get('SELECT * FROM job_descriptions WHERE position_id = ? AND version = ?', seat.id, Number(version));
+    if (!before) throw new OrgError('No such version of that job description.', 'not_found');
+    ctx.store.tx(() => {
+      ctx.store.run('DELETE FROM job_descriptions WHERE id = ?', before.id);
+      ctx.store.record(ctx.who.label, 'delete', 'job_description', before.id, `${seat.title} v${before.version}`, versionOut(before), null);
+    });
+    return { status: 204 };
+  },
+};
+
 // ── the organisation's own fields ────────────────────────────────────────────────────────────────────────────
 
 export const fields = {
@@ -929,6 +962,7 @@ export function exportAll(ctx) {
     people: ctx.store.all('SELECT * FROM people ORDER BY id').map(personOut),
     assignments: ctx.store.all('SELECT * FROM assignments ORDER BY created_at').map(assignmentOut),
     fields: ctx.store.all('SELECT * FROM fields ORDER BY target, sort_order, key').map((f) => fieldJson(f)),
+    job_descriptions: ctx.store.all('SELECT * FROM job_descriptions ORDER BY position_id, version').map(versionOut),
   };
   return { raw: JSON.stringify(out, null, 2), type: 'application/json; charset=utf-8', file: `organisation-${day(ctx)}.json` };
 }

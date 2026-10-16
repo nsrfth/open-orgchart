@@ -6,6 +6,8 @@ chart that draws it.
 * **The structure**: departments in a tree, positions (seats) in them, people holding seats from one day until
   another (primary or acting), and fields of the organisation's own (a grade, a cost centre, a location). One
   service can keep several organisations.
+* **Job descriptions**: each seat has its own, kept version by version, each from a day. Readers open it from the
+  seat's card.
 * **The answers**: who someone's manager is, their chain, reports and peers; who leads a department; a person's card
   and their sign-in claims. These come from **one rule**, as of any day. A vacant seat is passed through, never
   stopped at.

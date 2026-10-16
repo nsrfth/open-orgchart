@@ -12,7 +12,9 @@
  *     reading the right way; a PDF is one page holding it; a picture too long for a canvas is made smaller;
  *  5. the screen: the charts are switched, a name is found and brought up, a card folds what is under it, the
  *     options redraw it, a card pressed opens its department, a department is dragged onto another, and both
- *     the picture and the data are taken out.
+ *     the picture and the data are taken out;
+ *  6. a seat's job description: offered on the cards of seats that have one, asked for when opened, and read
+ *     section by section at the chart's side.
  */
 import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -20,6 +22,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 
 import OrgChartView from '../src/react/OrgChart.jsx';
 import { pictureOf } from '../src/react/TakeOut.jsx';
+import { blocksOf } from '../src/react/JobDescription.jsx';
 import { makeT } from '../src/react/words.js';
 import { chainOf, departmentNodes, findNodes, forest, initials, nodesOf, peopleNodes, positionNodes } from '../src/core/model.js';
 import { SIZES, fitInto, layoutChart, leftOf, linkPath } from '../src/core/layout.js';
@@ -502,5 +505,83 @@ describe('on its own', () => {
     fireEvent.click(screen.getByTestId('org-chart-export'));
     expect(screen.getByTestId('org-chart-export-csv')).toBeInTheDocument();
     expect(screen.queryByTestId('org-chart-export-xlsx')).toBeNull();
+  });
+});
+
+// ── a seat's job description ──────────────────────────────────────────────────────────────────────────────────
+
+describe("a seat's job description", () => {
+  afterEach(() => cleanup());
+  const SUMMARY = { version: 2, valid_from: '2026-01-01' };
+  const LINES = { ...REPORTING,
+    people: REPORTING.people.map((p) => (p.id === CTO.id ? { ...p, position_id: 'p-cto' } : p)),
+    seats: REPORTING.seats.map((s) => (s.id === 'p-cto' ? { ...s, jd: SUMMARY } : s)) };
+  const JD = {
+    position: { id: 'p-cto', title: 'Chief technology officer', code: '', department: { id: 'tech', name: 'Tech', path: ['Company', 'Tech'] } },
+    version: 2, valid_from: '2026-01-01', approved_by: 'Cyrus', as_of: '2026-10-10',
+    sections: { requirements: 'Eight years in software.', purpose: 'Owns the technology.\nAnd its teams.', responsibilities: '- Lead the teams\n- Keep the budget\n\n1. Ship\n2. Run' },
+  };
+
+  it('reads its text as paragraphs and lists, never as markup', () => {
+    expect(blocksOf('One.\nTwo.\n\n- a\n* b\n• c\n1. first\n2) second\n<b>bold</b>')).toEqual([
+      { kind: 'p', lines: ['One.', 'Two.'] }, { kind: 'ul', lines: ['a', 'b', 'c'] }, { kind: 'ol', lines: ['first', 'second'] }, { kind: 'p', lines: ['<b>bold</b>'] },
+    ]);
+    expect(blocksOf('')).toEqual([]);
+  });
+
+  it("is on a seat's card, and on the card of whoever holds the seat", () => {
+    const seats = positionNodes(LINES.seats);
+    expect(seats.find((n) => n.id === 's:p-cto').jd).toEqual(SUMMARY);
+    expect(seats.find((n) => n.id === 's:p-ceo').jd).toBeNull();
+    const people = nodesOf('people', { reporting: LINES });
+    expect(people.find((n) => n.id === `p:${CTO.id}`).jd).toEqual(SUMMARY);
+    expect(people.find((n) => n.id === `p:${CEO.id}`).jd).toBeNull();
+  });
+
+  it('is asked for when opened, and read section by section in their order; Escape puts it away', async () => {
+    const asked = [];
+    const picked = [];
+    render(<OrgChartView departments={DEPARTMENTS} reporting={LINES} storageKey={null} defaultOptions={{ draws: 'positions' }} onSelect={(id) => picked.push(id)}
+                         loadJobDescription={(id) => { asked.push(id); return Promise.resolve(JD); }} />);
+    await flush();
+    expect(screen.queryByTestId('org-chart-jd-open-s:p-ceo')).toBeNull();
+    fireEvent.click(screen.getByTestId('org-chart-jd-open-s:p-cto'));
+    const panel = await screen.findByTestId('org-chart-jd');
+    expect(asked).toEqual(['p-cto']);
+    expect(picked).toEqual([]);                                                     // opening it is not pressing the card
+    await waitFor(() => expect(screen.getByTestId('org-chart-jd-version')).toHaveTextContent('Version 2, since January 1, 2026 · Approved by Cyrus'));
+    expect(panel).toHaveTextContent('Company / Tech');
+    expect([...panel.querySelectorAll('section h3')].map((h) => h.textContent)).toEqual(['Purpose of the role', 'Key responsibilities', 'Requirements']);
+    expect([...screen.getByTestId('org-chart-jd-responsibilities').querySelectorAll('ul li, ol li')].map((li) => li.textContent)).toEqual(['Lead the teams', 'Keep the budget', 'Ship', 'Run']);
+    expect(document.activeElement).toBe(screen.getByTestId('org-chart-jd-close'));
+    fireEvent.keyDown(panel, { key: 'Escape' });
+    expect(screen.queryByTestId('org-chart-jd')).toBeNull();
+    // and from the card of the person who holds the seat
+    fireEvent.click(screen.getByTestId('org-chart-draws-people'));
+    await flush();
+    fireEvent.click(screen.getByTestId(`org-chart-jd-open-p:${CTO.id}`));
+    await waitFor(() => expect(asked).toEqual(['p-cto', 'p-cto']));
+    fireEvent.click(await screen.findByTestId('org-chart-jd-close'));
+    expect(screen.queryByTestId('org-chart-jd')).toBeNull();
+  });
+
+  it('in Persian; and says so when it cannot be read', async () => {
+    let answer = Promise.resolve(JD);
+    render(<OrgChartView departments={DEPARTMENTS} reporting={LINES} storageKey={null} language="fa" defaultOptions={{ draws: 'positions' }} loadJobDescription={() => answer} />);
+    await flush();
+    fireEvent.click(screen.getByTestId('org-chart-jd-open-s:p-cto'));
+    const panel = await screen.findByTestId('org-chart-jd');
+    await waitFor(() => expect(panel).toHaveTextContent('هدف شغل'));
+    expect(panel).toHaveTextContent('شرح شغل');
+    answer = Promise.reject(new Error('away'));
+    fireEvent.click(screen.getByTestId('org-chart-jd-open-s:p-cto'));
+    await waitFor(() => expect(screen.getByTestId('org-chart-jd')).toHaveTextContent('شرح شغل خوانده نشد.'));
+  });
+
+  it('is offered only when the chart is handed a way to ask for it', async () => {
+    render(<OrgChartView departments={DEPARTMENTS} reporting={LINES} storageKey={null} defaultOptions={{ draws: 'positions' }} />);
+    await flush();
+    expect(screen.getByTestId('org-chart-card-s:p-cto')).toBeInTheDocument();
+    expect(screen.queryByTestId('org-chart-jd-open-s:p-cto')).toBeNull();
   });
 });

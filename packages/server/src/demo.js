@@ -46,3 +46,45 @@ export function demoRows() {
     row(D('People'), 'People partner', p.people2, { code: 'PPL-2' }),
   ];
 }
+
+/** Job descriptions of some of the example's seats; the chief technology officer's in two versions. */
+export function demoJobDescriptions() {
+  return [
+    { department: D(), position: 'Chief executive', valid_from: '2024-01-01', approved_by: 'The board',
+      sections: {
+        purpose: 'Leads the company towards its goals: sets its direction, builds the team that gets it there, and answers to the board for the results.',
+        responsibilities: '- Set the company\'s strategy and yearly plan, and see them through\n- Lead the executive team and hold it to account\n- Keep the board informed, and bring it the decisions that are its own\n- Represent the company to customers, investors and the public',
+        authority: '- Hires and dismisses the executive team, with the board\'s agreement\n- Approves spending up to the limit the board sets',
+        requirements: '- Ten years or more of leading a business or a large part of one\n- A record of growing a company through change',
+        measures: '1. Revenue and profit against the plan\n2. Customer and employee satisfaction\n3. The executive team\'s own results',
+      } },
+    { department: D('Technology'), position: 'Chief technology officer', valid_from: '2024-01-01', approved_by: 'Maya Lindqvist',
+      sections: {
+        purpose: 'Owns the technology the company runs on and sells, and the teams that build it.',
+        responsibilities: '- Set the technical direction and keep the platform reliable\n- Lead the platform, data and design teams\n- Plan and keep to the technology budget',
+        requirements: '- Eight years or more in software, four of them leading teams\n- Experience running systems that customers depend on',
+      } },
+    { department: D('Technology'), position: 'Chief technology officer', valid_from: '2026-01-01', approved_by: 'Maya Lindqvist', note: 'Security and data protection added',
+      sections: {
+        responsibilities: '- Set the technical direction and keep the platform reliable\n- Lead the platform, data and design teams\n- Plan and keep to the technology budget\n- Own information security and the protection of customers\' data',
+        relationships: 'Works with the chief financial officer on the budget, and with Operations on what customers need. Outside: the main technology suppliers, and auditors.',
+      } },
+    { department: D('Technology', 'Platform'), position: 'Software engineer', valid_from: '2024-01-01', approved_by: 'Sara Ahmadi',
+      sections: {
+        purpose: 'Builds and runs the platform the company\'s products stand on.',
+        responsibilities: '- Design, write, test and ship features with the rest of the team\n- Review colleagues\' work, and have one\'s own reviewed\n- Take part in the on-call rota, and fix what breaks\n- Keep the documentation true',
+        requirements: '- Three years or more of building web services\n- JavaScript or TypeScript, SQL, and the habit of writing tests\n- Preferred: experience with cloud infrastructure',
+        competencies: '- Clear writing\n- Ownership: sees work through to the customer\n- Asks for help early',
+        measures: '- Work delivered as planned, with few defects\n- Reliability of the services one owns',
+        conditions: 'Hybrid: two days a week in the office. A week of on-call about once in six weeks.',
+      } },
+    { department: D('Operations', 'Sales'), position: 'Account executive', valid_from: '2024-01-01', approved_by: 'Lucas Moreau',
+      sections: {
+        purpose: 'Wins new customers and grows what existing ones buy.',
+        responsibilities: '- Find and qualify new prospects\n- Run sales conversations from the first call to the signed contract\n- Keep the customer records up to date',
+        requirements: '- Two years or more of business-to-business sales\n- Fluent English; a second language is a plus',
+        measures: '1. New revenue against the quarterly target\n2. Pipeline built\n3. Accuracy of the forecast',
+        conditions: 'Travel to customers about one week a month.',
+      } },
+  ];
+}

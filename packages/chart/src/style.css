@@ -75,6 +75,11 @@
 .ooc-count { display: inline-flex; flex-shrink: 0; align-items: center; gap: 4px; }
 .ooc-code { flex-shrink: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .ooc-crown { display: inline-flex; flex-shrink: 0; color: #f59e0b; }
+.ooc-jd {
+  display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0;
+  border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+}
+.ooc-jd:hover { background: var(--ooc-hover); color: var(--ooc-text) !important; }
 .ooc-fold {
   position: absolute; z-index: 10; display: inline-flex; align-items: center; justify-content: center;
   height: 22px; min-width: 22px; padding: 0 4px; border-radius: 999px; font-size: 10px; font-weight: 700;
@@ -173,6 +178,21 @@
 .ooc-gap-top { margin-top: 6px; }
 .ooc-pad { padding: 6px 8px 4px; }
 
+/* a seat's job description, read at the chart's side */
+.ooc-drawer {
+  position: absolute; z-index: 45; top: 12px; bottom: 12px; inset-inline: 12px; overflow-y: auto; padding: 14px 18px 18px;
+  font-size: 13.5px; line-height: 1.55;
+}
+.ooc-drawer-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-inline-end: -8px; }
+.ooc-drawer-what { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: var(--ooc-muted); }
+.ooc-drawer-title { margin: 4px 0 2px; font-size: 18px; font-weight: 700; line-height: 1.3; }
+.ooc-drawer-note { display: flex; align-items: center; gap: 8px; margin-top: 18px; color: var(--ooc-muted); }
+.ooc-drawer-section { margin-top: 18px; }
+.ooc-drawer-section .ooc-label { margin: 0 0 4px; }
+.ooc-drawer-section p { margin: 0 0 8px; }
+.ooc-drawer-section ul, .ooc-drawer-section ol { margin: 0 0 8px; padding-inline-start: 20px; }
+.ooc-drawer-section li { margin-bottom: 2px; }
+
 /* what the colours say, the small map, a word in the middle */
 .ooc-legend {
   position: absolute; bottom: 12px; inset-inline-start: 12px; z-index: 10; display: flex; flex-wrap: wrap; align-items: center;
@@ -198,6 +218,7 @@
 @keyframes ooc-spin { to { transform: rotate(360deg); } }
 
 @media (min-width: 640px) {
+  .ooc-drawer { inset-inline-start: auto; width: 26rem; }
   .ooc-legend { max-width: min(34rem, calc(100% - 18rem)); }
   .ooc-legend-item { display: inline-flex; }
   .ooc-map { display: block; }

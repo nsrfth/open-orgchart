@@ -46,6 +46,9 @@ export class Chart {
         || a.valid_from.localeCompare(b.valid_from) || a.created_at.localeCompare(b.created_at));
       this.seatsOf.set(personId, mine.map((a) => a.position_id));
     }
+    // which version of each seat's job description is in force on the day (the text itself is asked for on its own)
+    this.jds = new Map(store.all('SELECT position_id, version, valid_from FROM job_descriptions WHERE valid_from <= ? ORDER BY position_id, version', day)
+      .map((j) => [j.position_id, { version: j.version, valid_from: j.valid_from }]));
     this.organisations = new Map(store.all('SELECT * FROM organisations ORDER BY is_default DESC, name').map((o) => [o.id, {
       ...o, is_default: !!o.is_default, active: !!o.active, names: parsed(o.names, {}), domains: parsed(o.domains, []) }]));
     this.store = store;
@@ -76,6 +79,12 @@ export class Chart {
       if (dept && this.headSeat.get(dept.id)) return this.headSeat.get(dept.id);
     }
     return null;
+  }
+
+  /** A seat's job description in force: `{version, valid_from}`, or null when it has none. */
+  jdOf(seatId) {
+    const j = this.jds.get(seatId);
+    return j ? { ...j } : null;
   }
 
   holder(seatId, notPerson = null) {
@@ -283,7 +292,7 @@ export function card(c, p, { contact = true, extraKeys = null } = {}) {
   const seats = (c.assignments.get(p.id) || []).map((a) => {
     const seat = c.seats.get(a.position_id);
     return {
-      position: { id: seat.id, title: seat.title, code: seat.code, extra: told(seat.extra) }, department: deptRef(c, seat.department_id),
+      position: { id: seat.id, title: seat.title, code: seat.code, jd: c.jdOf(seat.id), extra: told(seat.extra) }, department: deptRef(c, seat.department_id),
       is_head: seat.is_head, primary: a.is_primary, acting: a.acting, since: a.valid_from || null, until: a.valid_to || null, extra: told(a.extra),
     };
   });
@@ -337,7 +346,7 @@ export function tree(c, { organisation = null, root = null, holders = true, cont
   for (const d of depts) {
     if (!d.active) continue;
     const seats = (seatsBy.get(d.id) || []).slice().sort((a, b) => (Number(b.is_head) - Number(a.is_head)) || a.title.localeCompare(b.title)).map((seat) => {
-      const one = { id: seat.id, title: seat.title, code: seat.code, is_head: seat.is_head, reports_to: seat.reports_to || null, extra: told(seat.extra) };
+      const one = { id: seat.id, title: seat.title, code: seat.code, is_head: seat.is_head, reports_to: seat.reports_to || null, jd: c.jdOf(seat.id), extra: told(seat.extra) };
       if (holders) one.holders = c.persons(c.holders.get(seat.id) || []).map((p) => personRef(p, { contact }));
       return one;
     });

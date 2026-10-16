@@ -14,11 +14,13 @@
  *   tree                       the departments, their seats, who holds them   (?root=<department>)
  *   reporting                  who answers to whom, as one list: the lines of a chart of people and of positions
  *   departments/<id>           one department, and who leads it
+ *   positions/<id>/jd          a seat's job description, as in force on the day
  *   fields                     the organisation's own fields   (?target=person|position|...)
  *
  * The same contract Divan's organisation answers, so a program written against one works against the other.
  */
 import { DEPTHS, Cover, note } from './auth.js';
+import { inForce, versionOut } from './descriptions.js';
 import { card, chainOf, chartOf, claims as claimsOf, managerOf, organisationJson, peersOf, personRef, reportsOf, tree as treeOf, byName } from './chart.js';
 import { TARGETS, fieldJson, fieldsFor } from './fields.js';
 import { OrgError, dayOf, flag, today } from './util.js';
@@ -26,7 +28,7 @@ import { VERSION as SERVICE_VERSION } from './version.js';
 
 export const VERSION = '1';
 const ASKS = ['me', 'people/<ref>', 'people/<ref>/manager', 'people/<ref>/chain', 'people/<ref>/reports', 'people/<ref>/peers',
-  'claims/<ref>', 'tree', 'reporting', 'departments/<id>', 'fields'];
+  'claims/<ref>', 'tree', 'reporting', 'departments/<id>', 'positions/<id>/jd', 'fields'];
 
 /** (chart, cover, day) for a question - or the refusal. */
 function open(ctx, what) {
@@ -214,7 +216,8 @@ export function reporting(ctx) {
     if (!dept || !dept.active || depth === null) continue;
     if (who.kind === 'client' && dept.organisation_id !== who.client.organisation_id) continue;
     const above = chart.above(seat.id);
-    const one = { id: seat.id, title: seat.title, code: seat.code, department: dept.name, department_id: dept.id, is_head: seat.is_head, answers_to: above || null };
+    const one = { id: seat.id, title: seat.title, code: seat.code, department: dept.name, department_id: dept.id, is_head: seat.is_head, answers_to: above || null,
+      jd: chart.jdOf(seat.id) };
     if (depth !== 'structure') one.holders = chart.persons(chart.holders.get(seat.id) || []).map((p) => personRef(p, { contact: depth === 'contact' }));
     seats.push(one);
   }
@@ -241,6 +244,27 @@ export function department(ctx, id) {
   }
   note(ctx.store, ctx.who, cover, 'departments', { about: id, deptId: dept.id });
   return { ...row, as_of: day };
+}
+
+/**
+ * A seat's job description, as in force on the day. It tells of the seat and not of whoever holds it, so an
+ * application is told it wherever its shares reach - at the depth of the structure too.
+ */
+export function jobDescription(ctx, id) {
+  const { chart, cover, day } = open(ctx, 'positions/jd');
+  const seat = chart.seats.get(id);
+  const dept = seat ? chart.depts.get(seat.department_id) : null;
+  const shown = !!dept && dept.active && cover.depth(dept.id) !== null
+    && (ctx.who.kind !== 'client' || dept.organisation_id === ctx.who.client.organisation_id);
+  const found = shown ? inForce(ctx.store, seat.id, day) : null;
+  if (!found) {
+    note(ctx.store, ctx.who, cover, 'positions/jd', { about: id, answered: false });
+    throw new OrgError('That seat has no job description among what you may see.', 'not_found');
+  }
+  const j = versionOut(found);
+  note(ctx.store, ctx.who, cover, 'positions/jd', { about: seat.id, deptId: dept.id });
+  return { position: { id: seat.id, title: seat.title, code: seat.code, department: { id: dept.id, name: dept.name, path: chart.path(dept.id).map((d) => d.name) } },
+    version: j.version, valid_from: j.valid_from, approved_by: j.approved_by, sections: j.sections, as_of: day };
 }
 
 export function fields(ctx) {

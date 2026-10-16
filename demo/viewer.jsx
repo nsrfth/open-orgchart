@@ -5,6 +5,7 @@
  *
  * Signing in is a key (a keeper's, or a system's): it is kept only in this tab (sessionStorage) and sent only to the
  * service this page came from. A keeper may also move departments by dragging them, and take the structure out as data.
+ * Anyone may open a seat's job description from its card.
  */
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -65,7 +66,7 @@ function App() {
     setError('');
     if (example) {
       const got = await (await fetch('example.json')).json();
-      setData({ departments: got.tree.departments, reporting: got.reporting });
+      setData({ departments: got.tree.departments, reporting: got.reporting, descriptions: got.descriptions || {} });
       setKeeps(false);
       return;
     }
@@ -94,6 +95,8 @@ function App() {
     } catch (err) { setError(err.message); }
   } : undefined;
   const exportData = keeps ? async (kind) => (await api(`api/org/pillar/export?format=${kind}`, key)).blob() : undefined;
+  const loadJobDescription = React.useCallback(async (id) => (example ? data?.descriptions?.[id] || null
+    : (await api(`api/org/v1/positions/${encodeURIComponent(id)}/jd`, key)).json()), [example, data, key]);
   const rtl = language === 'fa';
 
   return (
@@ -121,7 +124,7 @@ function App() {
           </form>
         ) : data ? (
           <OrgChart departments={data.departments} reporting={data.reporting} language={language} selectedId={selected} onSelect={setSelected}
-                    onMove={onMove} exportData={exportData} tableFormats={['csv', 'json']} onNotice={(n) => setError(n.text)} />
+                    onMove={onMove} exportData={exportData} tableFormats={['csv', 'json']} loadJobDescription={loadJobDescription} onNotice={(n) => setError(n.text)} />
         ) : <div className="wait">{t('Reading…')}</div>}
       </main>
     </div>

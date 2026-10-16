@@ -10,6 +10,7 @@
  *   people          who the organisation knows: a name, an address, who they are to the sign-in service (`sub`),
  *                   their number, and - only where the chart cannot say it - who they answer to
  *   assignments     a person holding a seat, from a day until a day (primary, acting)
+ *   job_descriptions  what a seat is for and asks of whoever holds it, version by version, each from a day
  *   fields          the organisation's own fields of departments, positions, assignments, people
  *   clients         applications and systems that may ask; shares: what each may be told
  *   access_log      every question a client asked, against the share that answered it
@@ -86,6 +87,14 @@ const SCHEMA = [
   CREATE TABLE changes (
     id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, actor TEXT NOT NULL, action TEXT NOT NULL, kind TEXT NOT NULL,
     object_id TEXT NOT NULL DEFAULT '', label TEXT NOT NULL DEFAULT '', before TEXT, after TEXT);
+  `,
+  // 2 - a seat's job description, version by version
+  `
+  CREATE TABLE job_descriptions (
+    id TEXT PRIMARY KEY, position_id TEXT NOT NULL REFERENCES positions(id) ON DELETE CASCADE, version INTEGER NOT NULL,
+    valid_from TEXT NOT NULL, sections TEXT NOT NULL DEFAULT '{}', approved_by TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '',
+    created_by TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL);
+  CREATE UNIQUE INDEX job_descriptions_version ON job_descriptions(position_id, version);
   `,
 ];
 

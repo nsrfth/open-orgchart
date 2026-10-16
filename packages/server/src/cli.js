@@ -9,11 +9,13 @@
  * Its settings come from the environment (src/config.js): ORG_PORT, ORG_DATA, ORG_OIDC_ISSUER, ...
  */
 import { loadConfig } from './config.js';
-import { demoRows } from './demo.js';
+import { demoJobDescriptions, demoRows } from './demo.js';
+import { describeSeats } from './descriptions.js';
 import { importRows, makeKeeperKey } from './keepers.js';
 import { Asker } from './auth.js';
 import { createService, firstKeeper, logger } from './server.js';
 import { Store } from './db.js';
+import { today } from './util.js';
 import { VERSION } from './version.js';
 
 const HELP = `open-orgchart ${VERSION} - an organisation chart that runs on its own
@@ -33,8 +35,10 @@ async function serve(config, log, { demo = false } = {}) {
   if (demo) {
     const empty = !service.store.get('SELECT id FROM departments LIMIT 1');
     if (empty) {
-      const told = importRows({ store: service.store, config, who: new Asker('keeper', { keeper: { name: 'demo' } }), query: new URLSearchParams() }, demoRows());
-      log('info', `The example organisation is in: ${told.departments} departments, ${told.positions} positions, ${told.people} people.`);
+      const who = new Asker('keeper', { keeper: { name: 'demo' } });
+      const told = importRows({ store: service.store, config, who, query: new URLSearchParams() }, demoRows());
+      const described = describeSeats(service.store, who, demoJobDescriptions(), today(config.timeZone));
+      log('info', `The example organisation is in: ${told.departments} departments, ${told.positions} positions, ${told.people} people, job descriptions of ${described} seats.`);
     }
     if (key) process.stdout.write(`\n  A keeper key for trying it (also in ${config.data}): ${key}\n\n`);
   }

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+* **Job descriptions** for each seat, kept version by version, each from a day:
+  * **Sections:** purpose, responsibilities, authority, requirements, competencies, relationships, measures and conditions.
+  * **Keepers' API:** `positions/<id>/jd`, to read every version, add one, or take one back.
+  * **The contract:** `GET /api/org/v1/positions/<id>/jd`. Applications may read it at any depth their shares reach.
+  * **Summaries:** seats in the tree, in reporting and on cards carry `jd`, the version in force.
+  * **Chart:** `loadJobDescription` opens a seat's job description from its card, in a panel at the side, in English and Persian.
+  * **Export:** the JSON export includes every version.
+  * **Database:** the new table is added on first start; nothing else changes.
+
 ## 0.1.0 - 2026-10-16
 
 The first release.

@@ -8,7 +8,7 @@ import React from 'react';
 import { initials } from '../core/model.js';
 import { tint } from '../core/style.js';
 import { useWords } from './context.js';
-import { Crown, Down, People, Side } from './icons.jsx';
+import { Crown, Down, File, People, Side } from './icons.jsx';
 
 /** A face with no picture: two letters in a circle of the card's colour. */
 export function Face({ face, size, accent }) {
@@ -20,7 +20,7 @@ export function Face({ face, size, accent }) {
   );
 }
 
-function Card({ item, left, accent, paper, options, selected, lit, found, dragging, target, side, dir, onPick, onFold, dragProps, renderFace }) {
+function Card({ item, left, accent, paper, options, selected, lit, found, dragging, target, side, dir, onPick, onFold, onJd, dragProps, renderFace }) {
   const { t, num } = useWords();
   const n = item.node;
   const show = options.show || {};
@@ -64,6 +64,13 @@ function Card({ item, left, accent, paper, options, selected, lit, found, draggi
         <span className="ooc-row">
           <span className={`ooc-card-title ooc-truncate${compact ? ' is-compact' : ''}`} dir="auto" title={n.title}>{n.title}</span>
           {n.head && n.kind !== 'department' && <span className="ooc-crown"><Crown size={12} label={t('Head')} /></span>}
+          {n.jd && onJd && (
+            <button type="button" className="ooc-jd" data-testid={`org-chart-jd-open-${item.id}`} style={{ color: paper.quiet }}
+                    aria-label={t('Job description')} title={t('Job description')}
+                    onClick={(e) => { e.stopPropagation(); onJd(item); }} onPointerDown={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}>
+              <File size={12} />
+            </button>
+          )}
         </span>
         {sub ? (
           <span className={`ooc-row ooc-card-sub${compact ? ' is-compact' : ''}`} style={{ color: subTone }}>

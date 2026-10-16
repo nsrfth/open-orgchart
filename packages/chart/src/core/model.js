@@ -13,7 +13,10 @@
  * person's line is the organisation's answer (`GET /api/org/v1/reporting`: the one rule, on the server).
  *
  *   node = { id, kind, parent, title, sub, face: {id, name, email} | null, vacant, head, inactive,
- *            people, seats, vacantSeats, code, branch, level, ref }
+ *            people, seats, vacantSeats, code, jd, branch, level, ref }
+ *
+ * `jd` is the seat's job description in force (`{version, valid_from}`, or null): on a seat's card, and on a
+ * person's card for the seat they hold first. Its text is asked for only when a reader opens it.
  *
  * `branch` is the top-level ancestor's id and `level` the depth (0 at the top) — what the colours go by.
  *
@@ -21,6 +24,10 @@
  */
 
 export const DRAWS = ['departments', 'positions', 'people'];
+
+/** The sections of a job description, in the order they are read. */
+export const JD_SECTIONS = ['purpose', 'responsibilities', 'authority', 'requirements', 'competencies', 'relationships', 'measures', 'conditions'];
+const jdOf = (seat) => (seat && seat.jd && typeof seat.jd === 'object' ? seat.jd : null);
 
 const text = (v) => (v === undefined || v === null ? '' : String(v));
 const holdersNow = (seat) => (Array.isArray(seat.holders) ? seat.holders : [])
@@ -88,20 +95,22 @@ export function positionNodes(seats) {
       title: text(s.title), sub: first ? text(first.name || first.email) : '', more: Math.max(0, holders.length - 1),
       face: first ? { id: first.id, name: text(first.name), email: text(first.email) } : null,
       vacant: !holders.length, head: !!s.is_head, inactive: false, people: holders.length, seats: 0, vacantSeats: 0,
-      code: text(s.code), place: text(s.department), ref: s,
+      code: text(s.code), place: text(s.department), jd: jdOf(s), ref: s,
     };
   });
 }
 
-/** Who answers to whom: one node per person, under their manager (`reporting.people`). */
-export function peopleNodes(people) {
+/** Who answers to whom: one node per person, under their manager (`reporting.people`); `seats` say whose job descriptions there are. */
+export function peopleNodes(people, seats = []) {
   const list = (Array.isArray(people) ? people : []).filter((p) => p && p.id !== undefined && p.id !== null);
   const known = new Set(list.map((p) => String(p.id)));
+  const seatById = new Map((Array.isArray(seats) ? seats : []).filter((s) => s && s.id).map((s) => [String(s.id), s]));
   return list.map((p) => ({
     id: `p:${p.id}`, kind: 'person', parent: p.manager !== null && p.manager !== undefined && known.has(String(p.manager)) ? `p:${p.manager}` : null,
     title: text(p.name || p.email), sub: text(p.position), place: text(p.department),
     face: { id: p.id, name: text(p.name), email: text(p.email) },
-    vacant: false, head: !!p.is_head, inactive: false, people: 0, seats: 0, vacantSeats: 0, code: '', ref: p,
+    vacant: false, head: !!p.is_head, inactive: false, people: 0, seats: 0, vacantSeats: 0, code: '',
+    jd: p.position_id ? jdOf(seatById.get(String(p.position_id))) : null, ref: p,
   }));
 }
 
@@ -152,7 +161,7 @@ export function forest(nodes) {
 /** The nodes of what is asked for: `data = {departments, reporting: {people, seats}}`. */
 export function nodesOf(draws, data) {
   const d = data || {};
-  if (draws === 'people') return peopleNodes(d.reporting && d.reporting.people);
+  if (draws === 'people') return peopleNodes(d.reporting && d.reporting.people, d.reporting && d.reporting.seats);
   if (draws === 'positions') return positionNodes(d.reporting && d.reporting.seats);
   return departmentNodes(d.departments);
 }

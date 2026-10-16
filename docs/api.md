@@ -69,6 +69,7 @@ without a closing slash.
 | `tree` | `{as_of, departments: [...]}`: the departments, their seats and who holds them (`?root=<department id>`). |
 | `reporting` | `{as_of, people: [...], seats: [...]}`: who answers to whom, as one list. |
 | `departments/<id>` | One department, with `leads`: who leads it in fact. |
+| `positions/<id>/jd` | A seat's [job description](#job-descriptions), as in force on the day. |
 | `fields` | `{fields: [...]}`: the organisation's own fields (`?target=department\|position\|assignment\|person`). |
 
 ### The one rule for who answers to whom
@@ -131,7 +132,8 @@ These are flat and small. An application can use them directly as the person's a
   {"id": "…", "name": "Technology", "parent": "…", "level": 1, "path": ["Example Co.", "Technology"],
    "organisation": "main", "depth": "contact", "extra": {},
    "head": {"id": 3, "name": "Sara Ahmadi", "email": "sara@example.com"},
-   "positions": [{"id": "…", "title": "Chief technology officer", "code": "TEC-1", "is_head": true, "reports_to": null, "extra": {},
+   "positions": [{"id": "…", "title": "Chief technology officer", "code": "TEC-1", "is_head": true, "reports_to": null,
+                  "jd": {"version": 2, "valid_from": "2026-01-01"}, "extra": {},
                   "holders": [{"id": 3, "name": "Sara Ahmadi", "email": "sara@example.com"}]}]}
 ]}
 ```
@@ -152,6 +154,30 @@ Departments come flat, parents before children; `parent` ties them together. At 
 This is what the chart's *People* and *Positions* views draw. A manager or seat that is not among what the asker
 may see is given as `null`, so the line ends there.
 
+A seat in the tree, in `reporting` and on a person's card carries `jd`: the version of its job description in
+force (`{version, valid_from}`), or `null` when it has none. The text itself comes from `positions/<id>/jd`.
+
+### Job descriptions
+
+A job description belongs to the seat, not to whoever holds it. It is kept version by version, and each version
+applies from its `valid_from` day. On any day, the version in force is the latest one that had begun.
+
+```json
+{"position": {"id": "…", "title": "Software engineer", "code": "TEC-11",
+              "department": {"id": "…", "name": "Platform", "path": ["Example Co.", "Technology", "Platform"]}},
+ "version": 1, "valid_from": "2024-01-01", "approved_by": "Sara Ahmadi", "as_of": "2026-10-16",
+ "sections": {"purpose": "Builds and runs the platform …",
+              "responsibilities": "- Design, write, test and ship features …\n- Review colleagues' work …"}}
+```
+
+The sections are `purpose`, `responsibilities`, `authority`, `requirements`, `competencies`, `relationships`,
+`measures` and `conditions`, in that order; a section with nothing in it is left out. Each is plain text: lines
+beginning with `- ` or `1. ` are a list, and an empty line ends a paragraph.
+
+A job description tells of the role and not of a person, so an application may read it wherever its shares reach,
+at the `structure` depth too. A seat that has none, or none in force on the day, or is outside what the asker may
+see, is `404`.
+
 ## For the people who keep it: `/api/org/pillar/`
 
 Keepers only. Bodies are JSON (`Content-Type: application/json`). Every change is written down: who made it, what
@@ -162,6 +188,7 @@ it was, and the before and after.
 | Organisations | `GET`, `POST organisations` | `GET`, `PATCH`, `DELETE organisations/<id>` |
 | Departments | `GET` (`?organisation=`, `?root=`), `POST departments` | `GET`, `PATCH` (`parent` moves it), `DELETE departments/<id>` |
 | Positions | `GET` (`?department=`), `POST positions` | `GET`, `PATCH`, `DELETE positions/<id>` |
+| Job descriptions | `GET positions/<id>/jd` (every version, and the one in force `?as_of=`), `POST positions/<id>/jd` (a new version) | `DELETE positions/<id>/jd/<version>` (takes a version back) |
 | People | `GET` (`?q=`, `?active=`, `?limit=`, `?offset=`), `POST people` | `GET` (with card, chain, reports), `PATCH`, `DELETE people/<id>` |
 | Assignments | `GET` (`?person=`, `?position=`, `?current=1`), `POST assignments` | `GET`, `PATCH`, `DELETE assignments/<id>` |
 | Fields | `GET` (`?target=`, `?all=1`), `POST fields` | `GET`, `PATCH`, `DELETE fields/<id>` (retires it) |
@@ -183,6 +210,7 @@ it was, and the before and after.
 * A seat that would answer, through any number of seats, to itself.
 * A manager named by hand who would close a circle.
 * A share naming a field not marked tellable.
+* A job description with a section it does not have, or with nothing in it, or a new version beginning before the last one began.
 * Removing the last keeper key or the last organisation.
 
 ### Adding things
@@ -198,6 +226,17 @@ POST /api/org/pillar/clients       {"name": "Payroll", "key": true}             
 POST /api/org/pillar/clients       {"name": "CRM", "client_id": "crm"}          (an application that signs people in)
 POST /api/org/pillar/shares        {"client": "<id>", "department": "<id>", "depth": "holders", "fields": ["grade"], "purpose": "…"}
 ```
+
+A new version of a job description is written over the last one. A section it does not mention is carried on, and
+a section given empty is taken out. `approved_by` and `note` are said of each version on its own.
+
+```http
+POST /api/org/pillar/positions/<id>/jd   {"valid_from": "2026-01-01", "approved_by": "Maya Lindqvist", "note": "Security added",
+                                          "sections": {"responsibilities": "- Lead the teams\n- Own information security"}}
+```
+
+A pay band, a grade or a location is better kept as a field of the position (`"target": "position"`), where it can
+be marked not tellable.
 
 A field's kind is one of `text`, `long`, `number`, `date`, `yesno`, `choice`, `choices`, `person`, `email`, `phone`
 or `url`. Values live on the thing (`extra`) and are checked against the kind.

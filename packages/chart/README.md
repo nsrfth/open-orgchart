@@ -71,6 +71,7 @@ those charts is drawn. The chart never works out who is under whom by itself.
 | `selectedId`, `onSelect(departmentId)` | The department picked; a card pressed picks its department. |
 | `onMove(departmentId, newParentId)` | Lets readers drag a department onto another. Your page asks and makes the change. |
 | `exportData(kind)`, `tableFormats` | Offers the structure as data too (`'xlsx'`, `'csv'`, `'json'`). Return a `Blob`, a string or an object. |
+| `loadJobDescription(positionId)` | Lets readers open a seat's job description from its card, and from the card of the person holding the seat. Return what [`GET /api/org/v1/positions/<id>/jd`](../../docs/api.md#job-descriptions) answers, or a promise of it. The card only offers it when the seat has `jd` set. |
 | `renderFace(face, size, accent)` | Your own picture of a person, instead of their initials. |
 | `onNotice({ kind, text })` | Called when something could not be done (a picture, a file, the lines). |
 | `title` | The exported picture's title. |

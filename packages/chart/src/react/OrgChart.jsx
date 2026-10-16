@@ -12,6 +12,9 @@
  * A department is dragged onto another to move it there, when the chart is handed `onMove` (the structure only;
  * the page that holds the chart asks first and makes the change).
  *
+ * A seat's job description is opened from its card (and from the card of whoever holds it), when the chart is
+ * handed `loadJobDescription`: asked for then, and read in a panel at the side (JobDescription.jsx).
+ *
  * Who is under whom is never worked out here: the structure is the tree's own, and the lines of positions and of
  * people are the organisation's answer (`reporting`, `GET /api/org/v1/reporting`).
  */
@@ -20,6 +23,7 @@ import { DRAWS, chainOf, findNodes, forest as forestOf, nodesOf } from '../core/
 import { SIZES, fitInto, layoutChart, leftOf, linkPath } from '../core/layout.js';
 import { accentOf, cleanOptions, keepOptions, legendOf, OPTIONS_KEY, paperFor, readOptions, screenIsDark } from '../core/style.js';
 import Card from './Card.jsx';
+import JobDescription from './JobDescription.jsx';
 import Options from './Options.jsx';
 import TakeOut from './TakeOut.jsx';
 import { ChartWords } from './context.js';
@@ -61,13 +65,15 @@ function useDark(theme) {
  *   storageKey      where the reader's choices are kept on the device (null: not kept); `defaultOptions` to begin
  *   selectedId, onSelect(departmentId), onMove(departmentId, newParentId), onNotice({kind, text})
  *   exportData(kind) -> Blob | string | object, and `tableFormats`: the structure taken out as data
+ *   loadJobDescription(positionId) -> a seat's job description, as `GET /api/org/v1/positions/<id>/jd` answers it
+ *                   (or a promise of it): offered on the cards of seats that have one
  *   renderFace(face, size, accent) -> a picture of a person, instead of their two letters
  *   title           the picture's title
  */
 export default function OrgChart({
   departments, reporting: given, loadReporting, selectedId, onSelect, onMove, onNotice,
   language = 'en', dir: dirGiven, words, theme = 'auto', storageKey = OPTIONS_KEY, defaultOptions,
-  exportData, tableFormats, renderFace, title, className = '', style,
+  exportData, tableFormats, renderFace, loadJobDescription, title, className = '', style,
 }) {
   const t = React.useMemo(() => makeT(language, words), [language, words]);
   const num = React.useCallback((n) => numberText(n, language), [language]);
@@ -300,6 +306,25 @@ export default function OrgChart({
     };
   };
 
+  // ── a seat's job description, opened from a card: the last one asked for is the one shown
+  const [jd, setJd] = React.useState(null);
+  const jdLoader = React.useRef(loadJobDescription);
+  jdLoader.current = loadJobDescription;
+  const jdAsked = React.useRef(0);
+  const openJd = React.useCallback((item) => {
+    const n = item.node;
+    const seatId = n.kind === 'position' ? n.ref.id : n.ref.position_id;
+    if (!jdLoader.current || seatId === undefined || seatId === null || seatId === '') return;
+    const asked = ++jdAsked.current;
+    setJd({ node: n, state: 'loading', jd: null });
+    Promise.resolve().then(() => jdLoader.current(seatId)).then(
+      (got) => { if (asked === jdAsked.current) setJd({ node: n, state: got ? 'ready' : 'error', jd: got || null }); },
+      () => { if (asked === jdAsked.current) setJd({ node: n, state: 'error', jd: null }); },
+    );
+  }, []);
+  const closeJd = React.useCallback(() => { jdAsked.current += 1; setJd(null); }, []);
+  React.useEffect(() => { closeJd(); }, [options.draws, closeJd]);
+
   // ── the small map: the whole chart, and the part of it in the window
   const mapScale = layout.items.length ? Math.min(MAP.w / Math.max(1, layout.width), MAP.h / Math.max(1, layout.height)) : 1;
   const mapJump = (e) => {
@@ -345,7 +370,7 @@ export default function OrgChart({
               <div key={it.id} onPointerEnter={() => setHover(it.id)} onPointerLeave={() => setHover((was) => (was === it.id ? '' : was))}>
                 <Card item={it} left={leftOf(it, layout, rtl)} accent={accentOf(it.node, options.colour, forest.branches)} paper={paper} options={options}
                       selected={picked(it)} lit={lit.has(it.id)} found={found === it.id} dragging={dragging === it.id} target={over === it.id && !banned.has(it.id)}
-                      side={side} dir={dir} onPick={pick} onFold={fold} dragProps={dragOf(it)} renderFace={renderFace} />
+                      side={side} dir={dir} onPick={pick} onFold={fold} onJd={loadJobDescription ? openJd : undefined} dragProps={dragOf(it)} renderFace={renderFace} />
               </div>
             ))}
           </div>
@@ -413,6 +438,8 @@ export default function OrgChart({
             <span className="ooc-legend-count" data-testid="org-chart-count">{counted}{levels > 1 ? ` · ${t('{n} levels', { n: num(levels) })}` : ''}</span>
           </div>
         )}
+
+        {jd && <JobDescription open={jd} onClose={closeJd} />}
 
         {/* the small map */}
         {options.minimap && layout.items.length > 6 && (

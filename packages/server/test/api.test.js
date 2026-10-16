@@ -325,3 +325,89 @@ describe('in and out', () => {
     assert.equal((await ask('/api/org/v1', { key: second.json.key })).status, 401);
   });
 });
+
+describe("a seat's job description", () => {
+  const seatOf = async (department, title) => (await ask(`/api/org/pillar/positions?department=${(await dept(department)).id}`)).json.positions.find((p) => p.title === title);
+
+  test('written version by version, each from a day; what a version does not say is carried on from the last', async () => {
+    const cto = await seatOf('Technology', 'Chief technology officer');
+    const first = await ask(`/api/org/pillar/positions/${cto.id}/jd`, { method: 'POST',
+      body: { valid_from: '2024-01-01', approved_by: 'Maya Lindqvist', sections: { purpose: 'Owns the technology.', responsibilities: '- Lead the teams\n- Keep the budget' } } });
+    assert.equal(first.status, 201, first.text);
+    assert.equal(first.json.version, 1);
+    const second = await ask(`/api/org/pillar/positions/${cto.id}/jd`, { method: 'POST',
+      body: { valid_from: '2026-01-01', sections: { responsibilities: '- Lead the teams\n- Keep the budget\n- Own security', purpose: '' , requirements: 'Eight years in software.' } } });
+    assert.equal(second.status, 201, second.text);
+    assert.equal(second.json.version, 2);
+    assert.deepEqual(Object.keys(second.json.sections), ['responsibilities', 'requirements']);      // purpose taken out; in their order
+    assert.equal(second.json.approved_by, '');                                                      // said of each version on its own
+
+    const now = await ask(`/api/org/v1/positions/${cto.id}/jd`);
+    assert.equal(now.status, 200, now.text);
+    assert.equal(now.json.version, 2);
+    assert.equal(now.json.position.title, 'Chief technology officer');
+    assert.deepEqual(now.json.position.department.path, ['Example Co.', 'Technology']);
+    assert.equal(now.json.note, undefined);                                                         // the keepers' own notes stay theirs
+    const then = await ask(`/api/org/v1/positions/${cto.id}/jd?as_of=2025-06-01`);
+    assert.equal(then.json.version, 1);
+    assert.equal(then.json.sections.purpose, 'Owns the technology.');
+    assert.equal((await ask(`/api/org/v1/positions/${cto.id}/jd?as_of=2023-06-01`)).status, 404);   // before the first version began
+
+    const tree = await ask('/api/org/v1/tree');
+    const seats = tree.json.departments.flatMap((d) => d.positions);
+    assert.deepEqual(seats.find((s) => s.id === cto.id).jd, { version: 2, valid_from: '2026-01-01' });
+    assert.equal(seats.find((s) => s.title === 'Chief executive').jd, null);
+    assert.equal((await ask('/api/org/v1/tree?as_of=2025-06-01')).json.departments.flatMap((d) => d.positions).find((s) => s.id === cto.id).jd.version, 1);
+    assert.equal((await ask('/api/org/v1/reporting')).json.seats.find((s) => s.id === cto.id).jd.version, 2);
+    assert.equal((await ask('/api/org/v1/people/sara@example.com')).json.position.jd.version, 2);
+
+    const kept = await ask(`/api/org/pillar/positions/${cto.id}/jd?as_of=2025-06-01`);
+    assert.deepEqual(kept.json.versions.map((v) => v.version), [2, 1]);
+    assert.equal(kept.json.current.version, 1);
+  });
+
+  test('what it refuses, and a version taken back', async () => {
+    const cto = await seatOf('Technology', 'Chief technology officer');
+    const write = (body) => ask(`/api/org/pillar/positions/${cto.id}/jd`, { method: 'POST', body });
+    assert.equal((await write({ sections: { salary: '5000' } })).status, 400);                     // not a section
+    assert.equal((await write({})).status, 400);                                                    // no sections
+    assert.equal((await write({ sections: { purpose: 'x' }, valid_from: '2025-01-01' })).status, 400);   // before the last version began
+    assert.equal((await write({ sections: { purpose: 'x' }, valid_from: '2026-02-30' })).status, 400);
+    const ceo = await seatOf('Example Co.', 'Chief executive');
+    assert.equal((await ask(`/api/org/pillar/positions/${ceo.id}/jd`, { method: 'POST', body: { sections: { purpose: ' ', measures: '' } } })).status, 400);   // says nothing
+    assert.equal((await ask(`/api/org/v1/positions/${ceo.id}/jd`)).status, 404);
+    assert.equal((await ask('/api/org/v1/positions/no-such-seat/jd')).status, 404);
+    assert.equal((await ask(`/api/org/pillar/positions/${cto.id}/jd`, { method: 'PATCH', body: {} })).status, 405);
+
+    const third = await write({ sections: { purpose: 'A mistake.' } });
+    assert.equal(third.json.version, 3);
+    assert.equal((await ask(`/api/org/pillar/positions/${cto.id}/jd/3`, { method: 'DELETE' })).status, 204);
+    assert.equal((await ask(`/api/org/pillar/positions/${cto.id}/jd/3`, { method: 'DELETE' })).status, 404);
+    assert.equal((await ask(`/api/org/v1/positions/${cto.id}/jd`)).json.version, 2);              // the one before is in force again
+    const changes = (await ask('/api/org/pillar/changes?since=0&limit=1000')).json.changes.filter((c) => c.kind === 'job_description');
+    assert.deepEqual(changes.map((c) => c.action), ['create', 'create', 'create', 'delete']);
+    const all = await ask('/api/org/pillar/export?format=json');
+    assert.deepEqual(all.json.job_descriptions.filter((j) => j.position === cto.id).map((j) => j.version), [1, 2]);
+  });
+
+  test('an application is told it wherever its shares reach - the structure alone is enough - and nowhere else', async () => {
+    const cto = await seatOf('Technology', 'Chief technology officer');
+    const ceo = await seatOf('Example Co.', 'Chief executive');
+    await ask(`/api/org/pillar/positions/${ceo.id}/jd`, { method: 'POST', body: { sections: { purpose: 'Leads the company.' } } });
+    const made = await ask('/api/org/pillar/clients', { method: 'POST', body: { name: 'Recruiting', key: true } });
+    const key = made.json.key;
+    assert.equal((await ask(`/api/org/v1/positions/${cto.id}/jd`, { key })).json.code, 'no_share');
+    const tech = await dept('Technology');
+    await ask('/api/org/pillar/shares', { method: 'POST', body: { client: made.json.client.id, department: tech.id, depth: 'structure' } });
+    const told = await ask(`/api/org/v1/positions/${cto.id}/jd`, { key });
+    assert.equal(told.status, 200, told.text);
+    assert.equal(told.json.version, 2);
+    assert.equal((await ask(`/api/org/v1/positions/${ceo.id}/jd`, { key })).status, 404);           // outside Technology
+    assert.equal((await ask(`/api/org/pillar/positions/${cto.id}/jd`, { key })).status, 403);       // the versions are the keepers'
+    const log = (await ask(`/api/org/pillar/access?client=${made.json.client.id}`)).json.access;
+    assert.ok(log.some((a) => a.what === 'positions/jd' && a.about === cto.id && a.answered));
+    assert.ok(log.some((a) => a.what === 'positions/jd' && a.about === ceo.id && !a.answered));
+    const token = tokenFor({ sub: 'sub-priya', email: 'priya@example.com' }, { azp: 'org-viewer' });
+    assert.equal((await ask(`/api/org/v1/positions/${ceo.id}/jd`, { key: null, token })).json.sections.purpose, 'Leads the company.');   // the organisation's own people: all of it
+  });
+});
